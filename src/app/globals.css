@@ -1,0 +1,29 @@
+@import "tailwindcss";
+@plugin "daisyui";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+.hero-gradient {
+  background: radial-gradient(
+      ellipse 80% 60% at 50% -10%,
+      color-mix(in oklch, var(--color-primary) 35%, transparent),
+      transparent
+    ),
+    radial-gradient(
+      ellipse 60% 50% at 100% 0%,
+      color-mix(in oklch, var(--color-secondary) 25%, transparent),
+      transparent
+    );
+}
