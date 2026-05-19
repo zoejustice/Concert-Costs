@@ -4,7 +4,10 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency, getTotalCost } from "@/lib/concert-math";
+import { uploadConcertPhoto, validatePhotoFile } from "@/lib/concert-photo";
+import { normalizeSetlist } from "@/lib/setlist";
 import { FormField } from "./FormField";
+import { SetlistEditor } from "./SetlistEditor";
 
 const emptyCosts = {
   ticket_cost: 0,
@@ -62,6 +65,10 @@ const initialForm: FormState = {
 export function AddConcertForm({ userId }: { userId: string }) {
   const router = useRouter();
   const [form, setForm] = useState<FormState>(initialForm);
+  const [setlistSongs, setSetlistSongs] = useState<string[]>([""]);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,20 +118,54 @@ export function AddConcertForm({ userId }: { userId: string }) {
       other_cost: Number(form.other_cost) || 0,
       fun_rating: Number(form.fun_rating),
       notes: form.notes.trim() || null,
+      setlist: normalizeSetlist(setlistSongs),
     };
 
-    const supabase = createClient();
-    const { error: insertError } = await supabase.from("concerts").insert(payload);
+    if (photoFile) {
+      const photoValidation = validatePhotoFile(photoFile);
+      if (photoValidation) {
+        setPhotoError(photoValidation);
+        setLoading(false);
+        return;
+      }
+    }
 
-    setLoading(false);
+    const supabase = createClient();
+    const { data: inserted, error: insertError } = await supabase
+      .from("concerts")
+      .insert(payload)
+      .select("id")
+      .single();
 
     if (insertError) {
+      setLoading(false);
       setError(insertError.message);
       return;
     }
 
+    if (photoFile && inserted?.id) {
+      const { error: photoUploadError } = await uploadConcertPhoto(
+        supabase,
+        userId,
+        inserted.id,
+        photoFile,
+      );
+      if (photoUploadError) {
+        setLoading(false);
+        setError(
+          `Concert saved, but photo upload failed: ${photoUploadError}`,
+        );
+        return;
+      }
+    }
+
+    setLoading(false);
     setSuccess(true);
     setForm(initialForm);
+    setSetlistSongs([""]);
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setPhotoError(null);
     router.refresh();
   }
 
@@ -303,6 +344,57 @@ export function AddConcertForm({ userId }: { userId: string }) {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="card bg-base-100 shadow-md border border-base-300">
+        <div className="card-body gap-6">
+          <div>
+            <h2 className="card-title text-lg">Concert photo</h2>
+            <p className="text-sm text-base-content/70">
+              Optional — one photo per concert. You can also add one later from
+              My Concerts.
+            </p>
+          </div>
+          {photoPreview ? (
+            <img
+              src={photoPreview}
+              alt="Preview"
+              className="rounded-lg max-h-48 w-full object-cover border border-base-300"
+            />
+          ) : null}
+          {photoError ? (
+            <p className="text-sm text-error">{photoError}</p>
+          ) : null}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            className="file-input file-input-bordered w-full"
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null;
+              setPhotoError(null);
+              setPhotoFile(file);
+              setPhotoPreview(file ? URL.createObjectURL(file) : null);
+              setSuccess(false);
+            }}
+          />
+        </div>
+      </section>
+
+      <section className="card bg-base-100 shadow-md border border-base-300">
+        <div className="card-body gap-6">
+          <div>
+            <h2 className="card-title text-lg">Setlist</h2>
+            <p className="text-sm text-base-content/70">
+              Optional — add songs in show order, or skip and fill in later from
+              My Concerts.
+            </p>
+          </div>
+          <SetlistEditor
+            songs={setlistSongs}
+            onChange={setSetlistSongs}
+            idPrefix="new-song"
+          />
         </div>
       </section>
 

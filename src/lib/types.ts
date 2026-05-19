@@ -19,6 +19,8 @@ export interface Concert {
   other_cost: number;
   fun_rating: number;
   notes: string | null;
+  setlist: string[];
+  photo_path: string | null;
   created_at: string;
 }
 

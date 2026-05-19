@@ -1,4 +1,4 @@
-import { ConcertList } from "@/components/ConcertList";
+import { MyConcertsView } from "@/components/MyConcertsView";
 import { getUserConcerts } from "@/lib/concerts-data";
 
 export default async function MyConcertsPage() {
@@ -9,10 +9,10 @@ export default async function MyConcertsPage() {
       <div>
         <h2 className="text-2xl font-bold">My Concerts</h2>
         <p className="text-base-content/70 text-sm mt-1">
-          Every show you have logged, newest first.
+          Search and filter your shows, or sort by date, cost, or fun rating.
         </p>
       </div>
-      <ConcertList concerts={concerts} />
+      <MyConcertsView concerts={concerts} />
     </div>
   );
 }

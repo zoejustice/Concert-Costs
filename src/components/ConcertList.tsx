@@ -1,3 +1,6 @@
+import Link from "next/link";
+import { ConcertPhotoDisplay } from "@/components/ConcertPhotoDisplay";
+import { ListBulletIcon, PhotoIcon } from "@heroicons/react/24/outline";
 import type { Concert } from "@/lib/types";
 import {
   COST_FIELDS,
@@ -24,8 +27,14 @@ function topCostCategories(concert: Concert, limit = 3) {
     .slice(0, limit);
 }
 
-export function ConcertList({ concerts }: { concerts: Concert[] }) {
-  if (concerts.length === 0) {
+export function ConcertList({
+  concerts,
+  hideEmptyState = false,
+}: {
+  concerts: Concert[];
+  hideEmptyState?: boolean;
+}) {
+  if (concerts.length === 0 && !hideEmptyState) {
     return (
       <div className="card bg-base-100 border border-dashed border-base-300 shadow-sm">
         <div className="card-body items-center text-center py-16">
@@ -40,18 +49,19 @@ export function ConcertList({ concerts }: { concerts: Concert[] }) {
     );
   }
 
-  const sorted = [...concerts].sort(
-    (a, b) =>
-      new Date(b.concert_date).getTime() - new Date(a.concert_date).getTime(),
-  );
+  if (concerts.length === 0) {
+    return null;
+  }
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      {sorted.map((concert) => {
+      {concerts.map((concert) => {
         const total = getTotalCost(concert);
         const costPerHour = getCostPerHour(concert);
         const funPer100 = getFunPointsPer100(concert);
         const categories = topCostCategories(concert);
+        const setlist = concert.setlist?.filter(Boolean) ?? [];
+        const hasSetlist = setlist.length > 0;
 
         return (
           <article
@@ -59,6 +69,10 @@ export function ConcertList({ concerts }: { concerts: Concert[] }) {
             className="card bg-base-100 shadow-md border border-base-300"
           >
             <div className="card-body gap-4">
+              <ConcertPhotoDisplay
+                photoPath={concert.photo_path}
+                alt={concert.concert_name}
+              />
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <h2 className="card-title text-lg leading-tight">
@@ -124,12 +138,45 @@ export function ConcertList({ concerts }: { concerts: Concert[] }) {
                 </div>
               ) : null}
 
+              {hasSetlist ? (
+                <div className="border-t border-base-300 pt-3">
+                  <p className="text-xs font-medium text-base-content/60 mb-2 flex items-center gap-1">
+                    <ListBulletIcon className="h-4 w-4" />
+                    Setlist ({setlist.length} songs)
+                  </p>
+                  <ol className="text-sm space-y-0.5 list-decimal list-inside text-base-content/80 max-h-32 overflow-y-auto">
+                    {setlist.map((song, i) => (
+                      <li key={i} className="truncate">
+                        {song}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ) : null}
+
               {concert.notes ? (
                 <p className="text-sm border-t border-base-300 pt-3 text-base-content/80">
                   <span className="font-medium">Notes: </span>
                   {concert.notes}
                 </p>
               ) : null}
+
+              <div className="card-actions justify-end pt-1 flex-wrap gap-2">
+                <Link
+                  href={`/app/concerts/${concert.id}/setlist#photo`}
+                  className="btn btn-outline btn-sm gap-1"
+                >
+                  <PhotoIcon className="h-4 w-4" />
+                  {concert.photo_path ? "Edit photo" : "Add photo"}
+                </Link>
+                <Link
+                  href={`/app/concerts/${concert.id}/setlist`}
+                  className="btn btn-outline btn-sm gap-1"
+                >
+                  <ListBulletIcon className="h-4 w-4" />
+                  {hasSetlist ? "Edit setlist" : "Add setlist"}
+                </Link>
+              </div>
             </div>
           </article>
         );

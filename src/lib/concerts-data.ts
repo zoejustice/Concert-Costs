@@ -15,3 +15,15 @@ export async function getUserConcerts(): Promise<Concert[]> {
 
   return (data ?? []) as Concert[];
 }
+
+export async function getConcertById(id: string): Promise<Concert | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("concerts")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data as Concert;
+}
