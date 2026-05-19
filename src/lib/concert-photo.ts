@@ -10,12 +10,17 @@ const ALLOWED_TYPES = [
   "image/webp",
   "image/gif",
 ];
+const ALLOWED_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "gif"];
 
-export function getConcertPhotoUrl(photoPath: string | null | undefined): string | null {
+export function getConcertPhotoUrl(
+  photoPath: string | null | undefined,
+  cacheBust?: string | number,
+): string | null {
   if (!photoPath) return null;
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!base) return null;
-  return `${base}/storage/v1/object/public/${CONCERT_PHOTOS_BUCKET}/${photoPath}`;
+  const url = `${base}/storage/v1/object/public/${CONCERT_PHOTOS_BUCKET}/${photoPath}`;
+  return cacheBust != null ? `${url}?v=${cacheBust}` : url;
 }
 
 export function buildPhotoPath(
@@ -26,11 +31,15 @@ export function buildPhotoPath(
   const ext =
     file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") ||
     "jpg";
-  return `${userId}/${concertId}.${ext}`;
+  return `${userId}/${concertId}-${Date.now()}.${ext}`;
 }
 
 export function validatePhotoFile(file: File): string | null {
-  if (!ALLOWED_TYPES.includes(file.type)) {
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  const typeOk = file.type && ALLOWED_TYPES.includes(file.type);
+  const extOk = ALLOWED_EXTENSIONS.includes(ext);
+
+  if (!typeOk && !extOk) {
     return "Please choose a JPEG, PNG, WebP, or GIF image.";
   }
   if (file.size > MAX_BYTES) {
@@ -39,11 +48,25 @@ export function validatePhotoFile(file: File): string | null {
   return null;
 }
 
+function contentTypeForFile(file: File): string {
+  if (file.type) return file.type;
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  const map: Record<string, string> = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+    gif: "image/gif",
+  };
+  return map[ext ?? ""] ?? "image/jpeg";
+}
+
 export async function uploadConcertPhoto(
   supabase: SupabaseClient,
   userId: string,
   concertId: string,
   file: File,
+  existingPhotoPath?: string | null,
 ): Promise<{ path: string | null; error: string | null }> {
   const validation = validatePhotoFile(file);
   if (validation) return { path: null, error: validation };
@@ -52,7 +75,10 @@ export async function uploadConcertPhoto(
 
   const { error: uploadError } = await supabase.storage
     .from(CONCERT_PHOTOS_BUCKET)
-    .upload(path, file, { upsert: true, contentType: file.type });
+    .upload(path, file, {
+      contentType: contentTypeForFile(file),
+      upsert: false,
+    });
 
   if (uploadError) {
     return { path: null, error: uploadError.message };
@@ -64,7 +90,12 @@ export async function uploadConcertPhoto(
     .eq("id", concertId);
 
   if (updateError) {
+    await supabase.storage.from(CONCERT_PHOTOS_BUCKET).remove([path]);
     return { path: null, error: updateError.message };
+  }
+
+  if (existingPhotoPath && existingPhotoPath !== path) {
+    await supabase.storage.from(CONCERT_PHOTOS_BUCKET).remove([existingPhotoPath]);
   }
 
   return { path, error: null };

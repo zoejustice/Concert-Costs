@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { PhotoIcon } from "@heroicons/react/24/outline";
@@ -24,8 +24,16 @@ export function ConcertPhotoUpload({ concertId, userId, photoPath }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [savedPath, setSavedPath] = useState<string | null>(photoPath);
+  const [cacheBust, setCacheBust] = useState<number>(() => Date.now());
 
-  const displayUrl = preview ?? getConcertPhotoUrl(photoPath);
+  useEffect(() => {
+    setSavedPath(photoPath);
+  }, [photoPath]);
+
+  const displayPath = savedPath ?? photoPath;
+  const displayUrl =
+    preview ?? getConcertPhotoUrl(displayPath, cacheBust);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -37,31 +45,39 @@ export function ConcertPhotoUpload({ concertId, userId, photoPath }: Props) {
     setLoading(true);
 
     const supabase = createClient();
-    const { error: uploadError } = await uploadConcertPhoto(
+    const { path, error: uploadErr } = await uploadConcertPhoto(
       supabase,
       userId,
       concertId,
       file,
+      displayPath,
     );
 
     setLoading(false);
 
-    if (uploadError) {
-      setError(uploadError);
+    if (uploadErr) {
+      setError(uploadErr);
       setPreview(null);
+      if (inputRef.current) inputRef.current.value = "";
       return;
     }
 
+    if (path) {
+      setSavedPath(path);
+      setCacheBust(Date.now());
+    }
+    setPreview(null);
+    if (inputRef.current) inputRef.current.value = "";
     setSuccess("Photo saved!");
     router.refresh();
   }
 
   async function handleRemove() {
-    if (!photoPath && !preview) return;
+    if (!displayPath && !preview) return;
 
-    if (photoPath && !confirm("Remove this concert photo?")) return;
+    if (displayPath && !confirm("Remove this concert photo?")) return;
 
-    if (!photoPath) {
+    if (!displayPath) {
       setPreview(null);
       if (inputRef.current) inputRef.current.value = "";
       return;
@@ -72,20 +88,22 @@ export function ConcertPhotoUpload({ concertId, userId, photoPath }: Props) {
     setSuccess(null);
 
     const supabase = createClient();
-    const { error: removeError } = await removeConcertPhoto(
+    const { error: removeErr } = await removeConcertPhoto(
       supabase,
       concertId,
-      photoPath,
+      displayPath,
     );
 
     setLoading(false);
 
-    if (removeError) {
-      setError(removeError);
+    if (removeErr) {
+      setError(removeErr);
       return;
     }
 
+    setSavedPath(null);
     setPreview(null);
+    setCacheBust(Date.now());
     if (inputRef.current) inputRef.current.value = "";
     setSuccess("Photo removed.");
     router.refresh();
@@ -107,6 +125,7 @@ export function ConcertPhotoUpload({ concertId, userId, photoPath }: Props) {
       {displayUrl ? (
         <div className="relative w-full max-w-md mx-auto aspect-[4/3] rounded-lg overflow-hidden border border-base-300 bg-base-200">
           <Image
+            key={displayUrl}
             src={displayUrl}
             alt="Concert"
             fill
@@ -124,7 +143,7 @@ export function ConcertPhotoUpload({ concertId, userId, photoPath }: Props) {
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
+        accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
         className="file-input file-input-bordered w-full max-w-md"
         onChange={handleFileChange}
         disabled={loading}
@@ -136,7 +155,7 @@ export function ConcertPhotoUpload({ concertId, userId, photoPath }: Props) {
           : "One photo per concert. JPEG, PNG, WebP, or GIF — max 5 MB."}
       </p>
 
-      {(photoPath || preview) && !loading ? (
+      {(displayPath || preview) && !loading ? (
         <button
           type="button"
           className="btn btn-outline btn-sm btn-error"
